@@ -1,24 +1,30 @@
+"""
+Functions for constructing a transformer model.
+"""
+
 import tensorflow as tf
 import tensorflow.contrib as tc
 
 
 def scaled_dot_product_attention(
-    Q: tf.tensor, K: tf.tensor, V: tf.tensor, scope: str = "sdp_attention"
-) -> tf.tensor:
+    Q: tf.Tensor,
+    K: tf.Tensor,
+    V: tf.Tensor,
+    dim_model: int,
+    scope: str = "sdp_attention",
+) -> tf.Tensor:
     """
     Scaled dot product attention.
     """
 
     assert Q.shape[-1] == K.shape[-1] == V.shape[-1]
 
-    d = float(Q.shape[-1])
-
     with tf.variable_scope(scope):
         # Create K^T
         out = tf.matmul(Q, tf.transpose(K, [0, 2, 1]))
 
         # Scale by dimension
-        out = out / tf.sqrt(d)
+        out = out / tf.sqrt(tf.cast(dim_model, tf.float64))
 
         out = tf.nn.softmax(out)
         out = tf.matmul(out, V)
@@ -27,12 +33,12 @@ def scaled_dot_product_attention(
 
 
 def multihead_attention(
-    query: tf.tensor,
-    memory: tf.tensor,
+    query: tf.Tensor,
+    memory: tf.Tensor,
     nbr_heads: int,
     dim_model: int,
     scope: str = "multihead_attention",
-) -> tf.tensor:
+) -> tf.Tensor:
 
     if memory is None:
         memory = query
@@ -49,7 +55,7 @@ def multihead_attention(
         V_split = tf.concat(tf.split(V, nbr_heads, axis=2), axis=0)
 
         # Apply scaled dot product attention
-        out = scaled_dot_product_attention(Q_split, K_split, V_split)
+        out = scaled_dot_product_attention(Q_split, K_split, V_split, dim_model)
 
         # Merge the multi-head back to the original shape
         out = tf.concat(tf.split(out, nbr_heads, axis=0), axis=2)
@@ -58,8 +64,8 @@ def multihead_attention(
 
 
 def pointwise_feedforward(
-    x: tf.tensor, dim_ff: int, dim_model: int, scope: str = "pointwise_feedforward"
-) -> tf.tensor:
+    x: tf.Tensor, dim_ff: int, dim_model: int, scope: str = "pointwise_feedforward"
+) -> tf.Tensor:
 
     out = x
     with tf.variable_scope(scope):
@@ -72,8 +78,8 @@ def pointwise_feedforward(
 
 
 def encoder_layer(
-    x: tf.tensor, nbr_heads: int, dim_model: int, dim_ff: int, scope: str
-) -> tf.tensor:
+    x: tf.Tensor, nbr_heads: int, dim_model: int, dim_ff: int, scope: str
+) -> tf.Tensor:
 
     out = x
     with tf.variable_scope(scope):
@@ -84,4 +90,20 @@ def encoder_layer(
         )
         out = tc.layers.layer_norm(out + pointwise_feedforward(out, dim_ff, dim_model))
 
+    return out
+
+
+def encoder(
+    x: tf.Tensor,
+    nbr_encoders: int,
+    nbr_heads: int,
+    dim_model: int,
+    dim_ff: int,
+    scope: str = "encoder",
+) -> tf.Tensor:
+
+    out = x
+    with tf.variable_scope(scope):
+        for i in range(nbr_encoders):
+            out = encoder_layer(out, nbr_heads, dim_model, dim_ff, f"enc_{i}")
     return out
