@@ -107,3 +107,54 @@ def encoder(
         for i in range(nbr_encoders):
             out = encoder_layer(out, nbr_heads, dim_model, dim_ff, f"enc_{i}")
     return out
+
+
+def decoder_layer(
+    memory: tf.Tensor,
+    context: tf.Tensor,
+    nbr_heads: int,
+    dim_model: int,
+    dim_ff: int,
+    scope: str,
+) -> tf.Tensor:
+
+    out = memory
+    with tf.variable_scope(scope):
+        out = tc.layers.layer_norm(
+            out
+            + multihead_attention(
+                out, out, nbr_heads, dim_model, scope="multihead_attention_0"
+            ),
+            center=True,
+            scale=True,
+        )
+        out = tc.layers.layer_norm(
+            out
+            + multihead_attention(
+                out, context, nbr_heads, dim_model, scope="multihead_attention_1"
+            ),
+            center=True,
+            scale=True,
+        )
+        out = tc.layers.layer_norm(
+            out + pointwise_feedforward(out, dim_ff, dim_model), center=True, scale=True
+        )
+
+    return out
+
+
+def decoder(
+    memory: tf.Tensor,
+    context: tf.Tensor,
+    nbr_decoders: int,
+    nbr_heads: int,
+    dim_model: int,
+    dim_ff: int,
+    scope: str = "decoder",
+) -> tf.Tensor:
+
+    out = memory
+    with tf.variable_scope(scope):
+        for i in range(nbr_decoders):
+            out = decoder_layer(out, context, nbr_heads, dim_model, dim_ff, f"dec_{i}")
+    return out
