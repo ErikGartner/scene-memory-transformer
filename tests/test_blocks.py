@@ -21,7 +21,7 @@ def test_intitialize_transformer():
         print(f"Current observations (state): {current_obs.shape}")
 
         enc = encoder(
-            observations,
+            x=observations,
             nbr_encoders=3,
             nbr_heads=2,
             dim_model=dim_model,
@@ -30,8 +30,8 @@ def test_intitialize_transformer():
         print(f"Encoded Memory (encoder output): {enc.shape}")
 
         dec = decoder(
-            enc,
-            observations,
+            memory=enc,
+            context=observations,
             nbr_decoders=3,
             nbr_heads=2,
             dim_model=dim_model,

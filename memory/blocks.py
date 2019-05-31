@@ -11,6 +11,7 @@ def scaled_dot_product_attention(
     K: tf.Tensor,
     V: tf.Tensor,
     dim_model: int,
+    mask: int = None,
     scope: str = "sdp_attention",
 ) -> tf.Tensor:
     """
@@ -26,6 +27,10 @@ def scaled_dot_product_attention(
         # Scale by dimension
         out = out / tf.sqrt(tf.cast(dim_model, tf.float64))
 
+        if mask is not None:
+            # Set to -Inf for 0 in mask
+            out = tf.multiply(out, mask) + (1.0 - mask) * (-1e10)
+
         out = tf.nn.softmax(out)
         out = tf.matmul(out, V)
 
@@ -37,6 +42,7 @@ def multihead_attention(
     memory: tf.Tensor,
     nbr_heads: int,
     dim_model: int,
+    mask: int = None,
     scope: str = "multihead_attention",
 ) -> tf.Tensor:
 
@@ -54,8 +60,15 @@ def multihead_attention(
         K_split = tf.concat(tf.split(K, nbr_heads, axis=2), axis=0)
         V_split = tf.concat(tf.split(V, nbr_heads, axis=2), axis=0)
 
+        if mask is not None:
+            mask_split = tf.tile(mask, [nbr_heads, 1, 1])
+        else:
+            mask_split = mask
+
         # Apply scaled dot product attention
-        out = scaled_dot_product_attention(Q_split, K_split, V_split, dim_model)
+        out = scaled_dot_product_attention(
+            Q=Q_split, K=K_split, V=V_split, mask=mask_split, dim_model=dim_model
+        )
 
         # Merge the multi-head back to the original shape
         out = tf.concat(tf.split(out, nbr_heads, axis=0), axis=2)
@@ -78,17 +91,31 @@ def pointwise_feedforward(
 
 
 def encoder_layer(
-    x: tf.Tensor, nbr_heads: int, dim_model: int, dim_ff: int, scope: str
+    x: tf.Tensor,
+    nbr_heads: int,
+    dim_model: int,
+    dim_ff: int,
+    scope: str,
+    mask: tf.Tensor = None,
 ) -> tf.Tensor:
 
     out = x
     with tf.variable_scope(scope):
         out = tc.layers.layer_norm(
-            out + multihead_attention(out, out, nbr_heads, dim_model),
+            out
+            + multihead_attention(
+                query=out,
+                memory=None,
+                nbr_heads=nbr_heads,
+                dim_model=dim_model,
+                mask=mask,
+            ),
             center=True,
             scale=True,
         )
-        out = tc.layers.layer_norm(out + pointwise_feedforward(out, dim_ff, dim_model))
+        out = tc.layers.layer_norm(
+            out + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model)
+        )
 
     return out
 
@@ -99,13 +126,21 @@ def encoder(
     nbr_heads: int,
     dim_model: int,
     dim_ff: int,
+    input_mask: tf.Tensor = None,
     scope: str = "encoder",
 ) -> tf.Tensor:
 
     out = x
     with tf.variable_scope(scope):
         for i in range(nbr_encoders):
-            out = encoder_layer(out, nbr_heads, dim_model, dim_ff, f"enc_{i}")
+            out = encoder_layer(
+                x=out,
+                nbr_heads=nbr_heads,
+                dim_model=dim_model,
+                dim_ff=dim_ff,
+                mask=input_mask,
+                scope=f"enc_{i}",
+            )
     return out
 
 
@@ -116,6 +151,8 @@ def decoder_layer(
     dim_model: int,
     dim_ff: int,
     scope: str,
+    input_mask: tf.Tensor = None,
+    target_mask: tf.Tensor = None,
 ) -> tf.Tensor:
 
     out = memory
@@ -123,7 +160,12 @@ def decoder_layer(
         out = tc.layers.layer_norm(
             out
             + multihead_attention(
-                out, out, nbr_heads, dim_model, scope="multihead_attention_0"
+                query=out,
+                memory=None,
+                nbr_heads=nbr_heads,
+                dim_model=dim_model,
+                mask=target_mask,
+                scope="multihead_attention_0",
             ),
             center=True,
             scale=True,
@@ -131,13 +173,20 @@ def decoder_layer(
         out = tc.layers.layer_norm(
             out
             + multihead_attention(
-                out, context, nbr_heads, dim_model, scope="multihead_attention_1"
+                query=out,
+                memory=context,
+                nbr_heads=nbr_heads,
+                dim_model=dim_model,
+                mask=input_mask,
+                scope="multihead_attention_1",
             ),
             center=True,
             scale=True,
         )
         out = tc.layers.layer_norm(
-            out + pointwise_feedforward(out, dim_ff, dim_model), center=True, scale=True
+            out + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model),
+            center=True,
+            scale=True,
         )
 
     return out
@@ -150,11 +199,22 @@ def decoder(
     nbr_heads: int,
     dim_model: int,
     dim_ff: int,
+    input_mask: tf.Tensor = None,
+    target_mask: tf.Tensor = None,
     scope: str = "decoder",
 ) -> tf.Tensor:
 
     out = memory
     with tf.variable_scope(scope):
         for i in range(nbr_decoders):
-            out = decoder_layer(out, context, nbr_heads, dim_model, dim_ff, f"dec_{i}")
+            out = decoder_layer(
+                memory=out,
+                context=context,
+                nbr_heads=nbr_heads,
+                dim_model=dim_model,
+                dim_ff=dim_ff,
+                input_mask=input_mask,
+                target_mask=target_mask,
+                scope=f"dec_{i}",
+            )
     return out
