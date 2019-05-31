@@ -14,10 +14,6 @@ def scaled_dot_product_attention(
     mask: int = None,
     scope: str = "sdp_attention",
 ) -> tf.Tensor:
-    """
-    Scaled dot product attention.
-    """
-
     assert Q.shape[-1] == K.shape[-1] == V.shape[-1]
 
     with tf.variable_scope(scope):
