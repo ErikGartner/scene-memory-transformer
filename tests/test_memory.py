@@ -30,5 +30,5 @@ class Test_Memory(object):
         mask = np.ones(self.memory_size)
 
         self.memory.set_state(state, mask)
-        print(self.memory.get_state())
-        print(self.memory.embeddings)
+        np.testing.assert_equal(state, self.memory.get_state())
+        np.testing.assert_equal(mask, self.memory.get_mask())
