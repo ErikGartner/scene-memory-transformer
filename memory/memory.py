@@ -26,7 +26,7 @@ class Memory(object):
         assert state.shape == (self.memory_size, self.embedding_size)
 
         size = np.count_nonzero(input_mask)
-        self.embeddings = deque(state[:size, :])
+        self.embeddings = deque(state[:size, :], maxlen=self.memory_size)
         self.input_mask = np.array(input_mask)
 
     def get_state(self):
