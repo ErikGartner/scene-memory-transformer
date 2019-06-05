@@ -63,7 +63,11 @@ def multihead_attention(
 
         # Apply scaled dot product attention
         out = scaled_dot_product_attention(
-            Q=Q_split, K=K_split, V=V_split, mask=mask_split, dim_model=dim_model
+            Q=Q_split,
+            K=K_split,
+            V=V_split,
+            mask=mask_split,
+            dim_model=dim_model,
         )
 
         # Merge the multi-head back to the original shape
@@ -73,7 +77,10 @@ def multihead_attention(
 
 
 def pointwise_feedforward(
-    x: tf.Tensor, dim_ff: int, dim_model: int, scope: str = "pointwise_feedforward"
+    x: tf.Tensor,
+    dim_ff: int,
+    dim_model: int,
+    scope: str = "pointwise_feedforward",
 ) -> tf.Tensor:
 
     out = x
@@ -110,14 +117,15 @@ def encoder_layer(
             scale=True,
         )
         out = tc.layers.layer_norm(
-            out + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model)
+            out
+            + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model)
         )
 
     return out
 
 
 def encoder(
-    x: tf.Tensor,
+    memory: tf.Tensor,
     nbr_encoders: int,
     nbr_heads: int,
     dim_model: int,
@@ -126,7 +134,7 @@ def encoder(
     scope: str = "encoder",
 ) -> tf.Tensor:
 
-    out = x
+    out = memory
     with tf.variable_scope(scope):
         for i in range(nbr_encoders):
             out = encoder_layer(
@@ -141,7 +149,7 @@ def encoder(
 
 
 def decoder_layer(
-    memory: tf.Tensor,
+    target: tf.Tensor,
     context: tf.Tensor,
     nbr_heads: int,
     dim_model: int,
@@ -151,7 +159,7 @@ def decoder_layer(
     target_mask: tf.Tensor = None,
 ) -> tf.Tensor:
 
-    out = memory
+    out = target
     with tf.variable_scope(scope):
         out = tc.layers.layer_norm(
             out
@@ -180,7 +188,8 @@ def decoder_layer(
             scale=True,
         )
         out = tc.layers.layer_norm(
-            out + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model),
+            out
+            + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model),
             center=True,
             scale=True,
         )
@@ -189,7 +198,7 @@ def decoder_layer(
 
 
 def decoder(
-    memory: tf.Tensor,
+    target: tf.Tensor,
     context: tf.Tensor,
     nbr_decoders: int,
     nbr_heads: int,
@@ -200,11 +209,11 @@ def decoder(
     scope: str = "decoder",
 ) -> tf.Tensor:
 
-    out = memory
+    out = target
     with tf.variable_scope(scope):
         for i in range(nbr_decoders):
             out = decoder_layer(
-                memory=out,
+                target=out,
                 context=context,
                 nbr_heads=nbr_heads,
                 dim_model=dim_model,
@@ -214,3 +223,35 @@ def decoder(
                 scope=f"dec_{i}",
             )
     return out
+
+
+def create_transformer(
+    observation: tf.Tensor,
+    memory: tf.Tensor,
+    dim_model: int,
+    dim_ff: int,
+    nbr_heads: int,
+    nbr_encoders: int,
+    nbr_decoders: int,
+    input_mask: tf.Tensor = None,
+    target_mask: tf.Tensor = None,
+):
+    enc = encoder(
+        x=memory,
+        nbr_encoders=nbr_encoders,
+        nbr_heads=nbr_heads,
+        dim_model=dim_model,
+        dim_ff=dim_ff,
+        input_mask=input_mask,
+    )
+    dec = decoder(
+        target=observation,
+        context=enc,
+        nbr_decoders=nbr_decoders,
+        nbr_heads=nbr_heads,
+        dim_model=dim_model,
+        dim_ff=dim_ff,
+        input_mask=input_mask,
+        target_mask=target_mask,
+    )
+    return dec
