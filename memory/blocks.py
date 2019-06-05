@@ -237,7 +237,7 @@ def create_transformer(
     target_mask: tf.Tensor = None,
 ):
     enc = encoder(
-        x=memory,
+        memory=memory,
         nbr_encoders=nbr_encoders,
         nbr_heads=nbr_heads,
         dim_model=dim_model,
