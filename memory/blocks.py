@@ -25,6 +25,9 @@ def scaled_dot_product_attention(
 
         if mask is not None:
             # Set to -Inf for 0 in mask
+            assert (
+                out.shape == mask.shape
+            ), f"Incorrect mask dimensions: {out.shape} vs {mask.shape}"
             out = tf.multiply(out, mask) + (1.0 - mask) * (-1e10)
 
         out = tf.nn.softmax(out)
