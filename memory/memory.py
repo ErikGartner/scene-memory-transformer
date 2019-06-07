@@ -22,6 +22,10 @@ class Memory(object):
         self.input_mask = np.zeros(self.memory_size)
 
     def set_state(self, state: np.ndarray, input_mask: np.ndarray):
+        if state is None:
+            self.reset()
+            return
+
         assert input_mask.shape == (self.memory_size,)
         assert state.shape == (self.memory_size, self.embedding_size)
 

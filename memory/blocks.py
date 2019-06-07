@@ -21,7 +21,7 @@ def scaled_dot_product_attention(
         out = tf.matmul(Q, tf.transpose(K, [0, 2, 1]))
 
         # Scale by dimension
-        out = out / tf.sqrt(tf.cast(dim_model, tf.float64))
+        out = out / tf.sqrt(tf.cast(dim_model, tf.float32))
 
         if mask is not None:
             # Set to -Inf for 0 in mask
@@ -51,9 +51,9 @@ def multihead_attention(
     with tf.variable_scope(scope):
         # Linear projections
         # dimensions: [batch, q_size / k_size, model_dim]
-        Q = tf.layers.dense(query, dim_model, activation=tf.nn.relu)
-        K = tf.layers.dense(memory, dim_model, activation=tf.nn.relu)
-        V = tf.layers.dense(memory, dim_model, activation=tf.nn.relu)
+        Q = tf.layers.Dense(dim_model, activation=tf.nn.relu)(query)
+        K = tf.layers.Dense(dim_model, activation=tf.nn.relu)(memory)
+        V = tf.layers.Dense(dim_model, activation=tf.nn.relu)(memory)
 
         Q_split = tf.concat(tf.split(Q, nbr_heads, axis=2), axis=0)
         K_split = tf.concat(tf.split(K, nbr_heads, axis=2), axis=0)
@@ -66,11 +66,7 @@ def multihead_attention(
 
         # Apply scaled dot product attention
         out = scaled_dot_product_attention(
-            Q=Q_split,
-            K=K_split,
-            V=V_split,
-            mask=mask_split,
-            dim_model=dim_model,
+            Q=Q_split, K=K_split, V=V_split, mask=mask_split, dim_model=dim_model
         )
 
         # Merge the multi-head back to the original shape
@@ -80,18 +76,15 @@ def multihead_attention(
 
 
 def pointwise_feedforward(
-    x: tf.Tensor,
-    dim_ff: int,
-    dim_model: int,
-    scope: str = "pointwise_feedforward",
+    x: tf.Tensor, dim_ff: int, dim_model: int, scope: str = "pointwise_feedforward"
 ) -> tf.Tensor:
 
     out = x
     with tf.variable_scope(scope):
-        out = tf.layers.conv1d(
-            out, filters=dim_ff, kernel_size=1, activation=tf.nn.relu
-        )
-        out = tf.layers.conv1d(out, filters=dim_model, kernel_size=1)
+        out = tf.keras.layers.Conv1D(
+            filters=dim_ff, kernel_size=1, activation=tf.nn.relu
+        )(out)
+        out = tf.keras.layers.Conv1D(filters=dim_model, kernel_size=1)(out)
 
     return out
 
@@ -120,8 +113,7 @@ def encoder_layer(
             scale=True,
         )
         out = tc.layers.layer_norm(
-            out
-            + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model)
+            out + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model)
         )
 
     return out
@@ -191,8 +183,7 @@ def decoder_layer(
             scale=True,
         )
         out = tc.layers.layer_norm(
-            out
-            + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model),
+            out + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model),
             center=True,
             scale=True,
         )

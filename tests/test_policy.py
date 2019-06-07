@@ -14,9 +14,32 @@ from stable_baselines.ppo2.ppo2 import safe_mean
 
 
 class CustomSceneMemoryPolicy1(SceneMemoryPolicy):
-    def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_batch, n_lstm=128, reuse=False, **_kwargs):
-        super().__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, n_lstm, reuse, layers=[64, 64],
-                         layer_norm=False, feature_extraction="mlp", **_kwargs)
+    def __init__(
+        self,
+        sess,
+        ob_space,
+        ac_space,
+        n_env,
+        n_steps,
+        n_batch,
+        n_lstm=128,
+        reuse=False,
+        **_kwargs
+    ):
+        super().__init__(
+            sess,
+            ob_space,
+            ac_space,
+            n_env,
+            n_steps,
+            n_batch,
+            n_lstm,
+            reuse,
+            layers=[64, 64],
+            layer_norm=False,
+            feature_extraction="mlp",
+            **_kwargs
+        )
 
 
 class CartPoleNoVelEnv(CartPoleEnv):
@@ -24,10 +47,7 @@ class CartPoleNoVelEnv(CartPoleEnv):
 
     def __init__(self):
         super(CartPoleNoVelEnv, self).__init__()
-        high = np.array([
-            self.x_threshold * 2,
-            self.theta_threshold_radians * 2,
-        ])
+        high = np.array([self.x_threshold * 2, self.theta_threshold_radians * 2])
         self.observation_space = spaces.Box(-high, high, dtype=np.float32)
 
     @staticmethod
@@ -55,14 +75,14 @@ LSTM_POLICIES = [CustomSceneMemoryPolicy1]
 @pytest.mark.parametrize("model_class", MODELS)
 @pytest.mark.parametrize("policy", LSTM_POLICIES)
 def test_lstm_policy(request, model_class, policy):
-    model_fname = './test_model_{}.pkl'.format(request.node.name)
+    model_fname = "./test_model_{}.pkl".format(request.node.name)
 
     try:
         # create and train
         if model_class == PPO2:
-            model = model_class(policy, 'CartPole-v1', nminibatches=1)
+            model = model_class(policy, "CartPole-v1", nminibatches=1)
         else:
-            model = model_class(policy, 'CartPole-v1')
+            model = model_class(policy, "CartPole-v1")
         model.learn(total_timesteps=100, seed=0)
 
         env = model.get_env()
@@ -82,10 +102,10 @@ def test_lstm_policy(request, model_class, policy):
             os.remove(model_fname)
 
 
-@pytest.mark.expensive
 def test_lstm_train():
     """Test that LSTM models are able to achieve >=150 (out of 500) reward on CartPoleNoVelEnv.
     This environment requires memory to perform well in."""
+
     def make_env(i):
         env = CartPoleNoVelEnv()
         env = bench.Monitor(env, None, allow_early_resets=True)
@@ -94,13 +114,25 @@ def test_lstm_train():
 
     env = SubprocVecEnv([lambda: make_env(i) for i in range(NUM_ENVS)])
     env = VecNormalize(env)
-    model = PPO2(CustomSceneMemoryPolicy1, env, n_steps=128, nminibatches=NUM_ENVS, lam=0.95, gamma=0.99,
-                 noptepochs=10, ent_coef=0.0, learning_rate=3e-4, cliprange=0.2, verbose=1)
+    model = PPO2(
+        CustomSceneMemoryPolicy1,
+        env,
+        n_steps=128,
+        nminibatches=NUM_ENVS,
+        lam=0.95,
+        gamma=0.99,
+        noptepochs=10,
+        ent_coef=0.0,
+        learning_rate=3e-4,
+        cliprange=0.2,
+        verbose=1,
+    )
 
     eprewmeans = []
+
     def reward_callback(local, _):
         nonlocal eprewmeans
-        eprewmeans.append(safe_mean([ep_info['r'] for ep_info in local['ep_info_buf']]))
+        eprewmeans.append(safe_mean([ep_info["r"] for ep_info in local["ep_info_buf"]]))
 
     model.learn(total_timesteps=100000, seed=0, callback=reward_callback)
 
@@ -111,4 +143,6 @@ def test_lstm_train():
     # See PR #244 for more detailed benchmarks.
 
     average_reward = sum(eprewmeans[-NUM_EPISODES_FOR_SCORE:]) / NUM_EPISODES_FOR_SCORE
-    assert average_reward >= 150, "Mean reward below 150; per-episode rewards {}".format(average_reward)
+    assert (
+        average_reward >= 150
+    ), "Mean reward below 150; per-episode rewards {}".format(average_reward)
