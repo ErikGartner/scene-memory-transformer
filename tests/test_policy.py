@@ -22,7 +22,12 @@ class CustomSceneMemoryPolicy1(SceneMemoryPolicy):
         n_env,
         n_steps,
         n_batch,
-        embedding_size=80,
+        memory_size=128,
+        embedding_size=16,
+        transformer_ff_dim=32,
+        transformer_nbr_heads=4,
+        transformer_nbr_encoders=6,
+        transformer_nbr_decoders=6,
         reuse=False,
         **_kwargs
     ):
@@ -33,7 +38,12 @@ class CustomSceneMemoryPolicy1(SceneMemoryPolicy):
             n_env,
             n_steps,
             n_batch,
+            memory_size=memory_size,
             embedding_size=embedding_size,
+            transformer_ff_dim=transformer_ff_dim,
+            transformer_nbr_heads=transformer_nbr_heads,
+            transformer_nbr_encoders=transformer_nbr_encoders,
+            transformer_nbr_decoders=transformer_nbr_encoders,
             reuse=reuse,
             **_kwargs
         )
