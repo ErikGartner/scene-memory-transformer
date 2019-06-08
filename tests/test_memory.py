@@ -1,7 +1,12 @@
 import numpy as np
 import tensorflow as tf
 
-from memory.memory import Memory, update_memory, batch_update_memory
+from memory.memory import (
+    Memory,
+    update_memory,
+    batch_update_memory,
+    sequence_update_memory,
+)
 
 
 class Test_Memory(object):
@@ -60,7 +65,7 @@ def test_update_memory():
                 tf.squeeze(done_ph[idx]),
             )
 
-        batch_memory, batch_mask = batch_update_memory(
+        batch_memory, batch_mask, new_state = sequence_update_memory(
             observations, memory, mask, done_ph
         )
 

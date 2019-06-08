@@ -24,7 +24,7 @@ from stable_baselines.common.distributions import (
 from stable_baselines.common.input import observation_input
 from stable_baselines.common.policies import RecurrentActorCriticPolicy, nature_cnn
 
-from .memory import Memory
+from .memory import batch_update_memory
 from .blocks import create_transformer
 
 
@@ -61,7 +61,7 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
         cnn_extractor=nature_cnn,
         layer_norm=False,
         feature_extraction="cnn",
-        **kwargs
+        **kwargs,
     ):
         super(SceneMemoryPolicy, self).__init__(
             sess,
@@ -70,7 +70,7 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
             n_env,
             n_steps,
             n_batch,
-            state_shape=(2 * n_lstm,),
+            state_shape=(100, 64 + 1),
             reuse=reuse,
             scale=(feature_extraction == "cnn"),
         )
@@ -100,61 +100,124 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
                     )
 
             print("Extracted features", extracted_features)
-            # input_sequence = batch_to_seq(extracted_features, self.n_env, n_steps)
-            # print("input", input_sequence)
+            input_sequence = batch_to_seq(extracted_features, self.n_env, n_steps)
+            masks = batch_to_seq(self.dones_ph, self.n_env, n_steps)
 
-            # print("input", self.states_ph)
-            #    exit(0)
-            # masks = batch_to_seq(self.dones_ph, self.n_env, n_steps)
-            # rnn_output, self.snew = lstm(input_sequence, masks, self.states_ph, 'lstm1', n_hidden=n_lstm,
-            #                             layer_norm=layer_norm)
-            # rnn_output = seq_to_batch(rnn_output)
+            print(
+                f"extracted_features: {extracted_features.shape}, input_sequence len: {len(input_sequence)}, {input_sequence[0].shape}, masks len: {len(masks)}, {masks[0].shape}"
+            )
 
+            self.embedding = extracted_features
             memory_size = 100
             embedding_size = extracted_features.shape.as_list()[-1]
 
             current_obs = extracted_features
-            current_obs = tf.tile(
+            tiled_obs = tf.tile(
                 tf.reshape(current_obs, (n_batch, 1, embedding_size)),
                 (1, memory_size, 1),
             )
-            print("current_obs", current_obs)
+            print("tiled_obs", tiled_obs)
 
             # Create SMT module
-            self._memory = Memory(
-                memory_size=memory_size, embedding_size=embedding_size
+
+            # self._input_mask_ph = tf.placeholder(
+            #     tf.float32, name="input_mask", shape=(n_batch, memory_size)
+            # )
+            # input_mask_tiled = tf.tile(
+            #     tf.expand_dims(self._input_mask_ph, 1), (1, memory_size, 1)
+            # )
+            # # self._target_mask_ph = tf.placeholder(
+            # #     tf.float32,
+            # #     name="target_mask",
+            # #     shape=(n_batch, memory_size, memory_size),
+            # # )
+            # self._memory_ph = tf.placeholder(
+            #     tf.float32, name="memory", shape=(n_batch, memory_size, embedding_size)
+            # )
+            print(
+                f"states_ph: {self.states_ph.shape}, self.dones_ph: {self.dones_ph.shape}"
             )
-            self._input_mask = tf.placeholder(
-                tf.float32, name="input_mask", shape=(n_batch, memory_size, memory_size)
+
+            # # Split the states input into memory and input put mask
+            # if self.states_ph.shape[0] == tf.Dimension(1):
+            #     memory = tf.squeeze(self.states_ph[:, :, :-1], axis=[0])
+            #     input_mask = tf.squeeze(self.states_ph[:, :, -1:], axis=[0, -1])
+            #     batch_memory, batch_mask, new_state = batch_update_memory(
+            #         observations=current_obs,
+            #         start_memory=memory,
+            #         start_mask=input_mask,
+            #         dones_ph=self.dones_ph,
+            #     )
+            #     self.snew = new_state
+            # else:
+            #     # Multiple environments in parallell
+            #     batch_memory = self.states_ph[:, :, :-1]
+            #     batch_mask = tf.squeeze(self.states_ph[:, :, -1:], axis=[-1])
+            #     self.snew = self.states_ph[:, :, :]
+
+            # Transform into (batch, seq, ...) shape
+            sequence_input = tf.reshape(
+                extracted_features,
+                (self.n_env, n_steps, embedding_size),
+                name="sequence_input",
             )
-            self._target_mask = tf.placeholder(
-                tf.float32,
-                name="target_mask",
-                shape=(n_batch, memory_size, memory_size),
+            sequence_state = tf.reshape(
+                self.states_ph,
+                (self.n_env, 1, memory_size, embedding_size + 1),
+                name="sequence_state",
             )
-            self._memory_ph = tf.placeholder(
-                tf.float32,
-                name="target_mask",
-                shape=(n_batch, memory_size, embedding_size),
+            sequence_done = tf.reshape(
+                self.dones_ph, (self.n_env, n_steps), name="sequence_done"
+            )
+            sequence_memory = tf.squeeze(
+                sequence_state[:, :, :, :-1], axis=[1], name="sequence_memory"
+            )
+            sequence_mask = tf.squeeze(
+                sequence_state[:, :, :, -1:], axis=[1, 3], name="sequence_mask"
+            )
+            print(
+                f"sequence_input: {sequence_input}, sequence_state: {sequence_state}, sequence_done: {sequence_done}, sequence_memory: {sequence_memory}, sequence_mask: {sequence_mask}"
+            )
+
+            batch_memory, batch_mask, batch_new_state = batch_update_memory(
+                observations=sequence_input,
+                start_memory=sequence_memory,
+                start_mask=sequence_mask,
+                dones_ph=sequence_done,
+            )
+
+            print(f"n_batch: {n_batch}")
+
+            # Transform back into (batch, ...) format
+            memory = tf.reshape(batch_memory, (n_batch, memory_size, embedding_size))
+            mask = tf.reshape(batch_mask, (n_batch, memory_size))
+            new_state = tf.reshape(
+                batch_new_state, (n_env, memory_size, embedding_size + 1)
+            )
+            self.snew = new_state
+
+            # Mask should be of dims: (batch, memory_size, memory_size)
+            tiled_mask = tf.tile(
+                tf.reshape(mask, (n_batch, 1, memory_size)), (1, memory_size, 1)
+            )
+
+            print(
+                f"batch_memory: {batch_memory}, input_mask: {batch_mask}, self.snew: {self.snew}, tiled_mask: {tiled_mask}, tiled_obs: {tiled_obs}, memory: {memory}"
             )
 
             trans_out = create_transformer(
-                observation=current_obs,
-                memory=self._memory_ph,
+                observation=tiled_obs,
+                memory=memory,
                 dim_model=embedding_size,
                 dim_ff=50,
                 nbr_heads=2,
                 nbr_encoders=1,
                 nbr_decoders=1,
-                input_mask=self._input_mask,
-                target_mask=self._target_mask,
+                input_mask=tiled_mask,
+                target_mask=None,
             )
-
-            print("trans_out", trans_out)
             flat_out = tf.keras.layers.Flatten()(trans_out)
-            print("flat_out", flat_out)
             value_fn = linear(flat_out, "vf", 1)
-            print("Value fn", value_fn)
 
             self._proba_distribution, self._policy, self.q_value = self.pdtype.proba_distribution_from_latent(
                 flat_out, flat_out
@@ -166,15 +229,14 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
         print("SETUP DONE!")
 
     def step(self, obs, state=None, mask=None, deterministic=False):
-        print("STEP", obs, state, mask, deterministic)
         if deterministic:
             return self.sess.run(
-                [self.deterministic_action, self.value_flat, self.neglogp],
+                [self.deterministic_action, self.value_flat, self.snew, self.neglogp],
                 {self.obs_ph: obs, self.states_ph: state, self.dones_ph: mask},
             )
         else:
             return self.sess.run(
-                [self.action, self.value_flat, self.neglogp],
+                [self.action, self.value_flat, self.snew, self.neglogp],
                 {self.obs_ph: obs, self.states_ph: state, self.dones_ph: mask},
             )
 

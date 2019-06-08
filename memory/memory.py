@@ -72,7 +72,9 @@ class Memory(object):
         return len(self.embeddings)
 
 
-def update_memory(observation, memory, mask, reset):
+def update_memory(
+    observation: tf.Tensor, memory: tf.Tensor, mask: tf.Tensor, reset: tf.Tensor
+):
     """
     Update the memory and mask based on latest observation
     """
@@ -96,10 +98,22 @@ def update_memory(observation, memory, mask, reset):
     return new_memory, new_mask
 
 
-def batch_update_memory(observations, start_memory, start_mask, dones_ph):
-    """
-    Takes a number of observations in batch and creates appropriate memory
-    and mask for each observation.
+def sequence_update_memory(
+    observations: tf.Tensor,
+    start_memory: tf.Tensor,
+    start_mask: tf.Tensor,
+    dones_ph: tf.Tensor,
+):
+    """Takes a number of observations in a sequence and creates appropriate
+    memory and mask for each observation.
+
+    :param tf.Tensor observations: Shape: (sequence_size, embedding_size)
+    :param tf.Tensor start_memory: Shape: (memory_size, embedding_size)
+    :param tf.Tensor start_mask: Shape: (memory_size)
+    :param tf.Tensor dones_ph: Shape: (sequence_size)
+    :return: Description of returned object.
+    :rtype: type
+
     """
     assert (
         observations.shape[0] == dones_ph.shape[0]
@@ -113,25 +127,87 @@ def batch_update_memory(observations, start_memory, start_mask, dones_ph):
     dones = tf.split(dones_ph, nbr_obs, axis=0)
     new_mem = start_memory
     new_mask = start_mask
-    for batch_idx in range(nbr_obs):
+    for seq_idx in range(nbr_obs):
         new_mem, new_mask = update_memory(
-            tf.squeeze(obs[batch_idx]), new_mem, new_mask, tf.squeeze(dones[batch_idx])
+            tf.squeeze(obs[seq_idx]), new_mem, new_mask, tf.squeeze(dones[seq_idx])
         )
         masks.append(new_mask)
         memories.append(new_mem)
 
-    batch_memory = tf.stack(memories, axis=0)
-    batch_mask = tf.stack(masks, axis=0)
+    new_state = tf.expand_dims(
+        tf.concat(
+            [new_mem, tf.expand_dims(new_mask, axis=1)], axis=1, name="new_state"
+        ),
+        axis=0,
+    )
+    sequence_memory = tf.stack(memories, axis=0, name="sequence_memory")
+    sequence_mask = tf.stack(masks, axis=0, name="sequence_mask")
+    assert sequence_memory.shape == tf.TensorShape(
+        [dones_ph.shape[0], start_memory.shape[0], start_memory.shape[1]]
+    ), f"Incorrect memory output shape: {sequence_memory.shape}"
+    assert sequence_mask.shape == tf.TensorShape(
+        [dones_ph.shape[0], start_mask.shape[0]]
+    ), f"Incorrect mask output shape: {sequence_mask.shape}"
+    assert new_state.shape == tf.TensorShape(
+        [
+            tf.Dimension(1),
+            start_memory.shape[0],
+            start_memory.shape[1] + tf.Dimension(1),
+        ]
+    ), f"Incorrect new_state output shape: {new_state.shape}"
+    return sequence_memory, sequence_mask, new_state
+
+
+def batch_update_memory(
+    observations: tf.Tensor,
+    start_memory: tf.Tensor,
+    start_mask: tf.Tensor,
+    dones_ph: tf.Tensor,
+):
+    """Takes a batch of sequences and updates their memories.
+
+    :param tf.Tensor observations: Shape: (batch, sequence_size, embedding_size)
+    :param tf.Tensor start_memory: Shape: (batch, memory_size, embedding_size)
+    :param tf.Tensor start_mask: Shape: (batch, memory_size)
+    :param tf.Tensor dones_ph: Shape: (batch, sequence_size)
+    :return: Description of returned object.
+    :rtype: type
+
+    """
     assert (
-        batch_memory.shape[0] == dones_ph.shape[0]
-        and batch_memory.shape[1] == start_memory.shape[0]
-        and batch_memory.shape[2] == start_memory.shape[1]
-    ), f"Incorrect memory output shape: {batch_memory.shape}"
+        observations.shape.rank == 3
+        and start_memory.shape.rank == 3
+        and start_mask.shape.rank == 2
+        and dones_ph.shape.rank == 2
+    ), "Incorrect ranks of input data"
     assert (
-        batch_mask.shape[0] == dones_ph.shape[0]
-        and batch_mask.shape[1] == start_mask.shape[0]
-    ), f"Incorrect mask output shape: {batch_mask.shape}"
-    return batch_memory, batch_mask
+        observations.shape[0]
+        == dones_ph.shape[0]
+        == start_mask.shape[0]
+        == start_memory.shape[0]
+    ), "Batch size should agree for all inputs."
+
+    batch_size = observations.shape.as_list()[0]
+
+    masks = []
+    memories = []
+    new_states = []
+    for batch_idx in range(batch_size):
+        with tf.variable_scope(f"batch_memory_{batch_idx}"):
+            new_mem, new_mask, new_state = sequence_update_memory(
+                observations[batch_idx, :, :],
+                start_memory[batch_idx, :, :],
+                start_mask[batch_idx, :],
+                dones_ph[batch_idx, :],
+            )
+        masks.append(new_mask)
+        memories.append(new_mem)
+        new_states.append(new_state)
+
+    batch_memory = tf.stack(memories, axis=0, name="batch_memory")
+    batch_mask = tf.stack(masks, axis=0, name="batch_mask")
+    batch_new_state = tf.stack(new_states, axis=0, name="batch_new_state")
+    return batch_memory, batch_mask, batch_new_state
 
 
 def empty_state(memory_size, embed_size):
