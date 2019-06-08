@@ -100,9 +100,6 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
             assert extracted_features.shape[-1] == tf.Dimension(
                 embedding_size
             ), f"embedding_size not correct: {extracted_features.shape[-1]} vs {embedding_size}"
-            assert (
-                memory_size % embedding_size == 0
-            ), "embedding_size must be a factor of the memory_size"
 
             # Transform from (batch x seq, ... ) into (batch, seq, ...) shape
             sequence_input = tf.reshape(

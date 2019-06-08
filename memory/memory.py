@@ -184,10 +184,10 @@ def batch_update_memory(
 
     """
     assert (
-        observations.shape.rank == 3
-        and start_memory.shape.rank == 3
-        and start_mask.shape.rank == 2
-        and dones_ph.shape.rank == 2
+        observations.shape.ndims == 3
+        and start_memory.shape.ndims == 3
+        and start_mask.shape.ndims == 2
+        and dones_ph.shape.ndims == 2
     ), "Incorrect ranks of input data"
     assert (
         observations.shape[0]
