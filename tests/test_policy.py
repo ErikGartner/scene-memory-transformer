@@ -22,7 +22,7 @@ class CustomSceneMemoryPolicy1(SceneMemoryPolicy):
         n_env,
         n_steps,
         n_batch,
-        embedding_size=4,
+        embedding_size=10,
         reuse=False,
         **_kwargs
     ):

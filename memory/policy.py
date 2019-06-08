@@ -46,9 +46,11 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
     :param type transformer_nbr_encoders: Description of parameter `transformer_nbr_encoders`.
     :param type transformer_nbr_decoders: Description of parameter `transformer_nbr_decoders`.
     :param type extractor: Description of parameter `extractor`.
+    :param type post_processor: Description of parameter `post_processor`.
     :param type reuse: Description of parameter `reuse`.
     :param type scale_features: Description of parameter `scale_features`.
     :param type **kwargs: Description of parameter `**kwargs`.
+
     """
 
     recurrent = True
