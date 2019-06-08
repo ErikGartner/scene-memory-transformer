@@ -30,18 +30,25 @@ from .blocks import create_transformer
 
 class SceneMemoryPolicy(RecurrentActorCriticPolicy):
     """
-    Actor critic policy object uses a previous state in the computation for the current step.
-    NOTE: this class is not limited to recurrent neural network policies,
-    see https://github.com/hill-a/stable-baselines/issues/241
-    :param sess: (TensorFlow session) The current TensorFlow session
-    :param ob_space: (Gym Space) The observation space of the environment
-    :param ac_space: (Gym Space) The action space of the environment
-    :param n_env: (int) The number of environments to run
-    :param n_steps: (int) The number of steps to run for each environment
-    :param n_batch: (int) The number of batch to run (n_envs * n_steps)
-    :param state_shape: (tuple<int>) shape of the per-environment state space.
-    :param reuse: (bool) If the policy is reusable or not
-    :param scale: (bool) whether or not to scale the input
+    SceneMemoryPolicy implements a policy that uses a Scene Memory Transformer
+    to attend previous states as a memory.
+
+    :param type sess: Description of parameter `sess`.
+    :param type ob_space: Description of parameter `ob_space`.
+    :param type ac_space: Description of parameter `ac_space`.
+    :param type n_env: Description of parameter `n_env`.
+    :param type n_steps: Description of parameter `n_steps`.
+    :param type n_batch: Description of parameter `n_batch`.
+    :param type memory_size: Description of parameter `memory_size`.
+    :param type embedding_size: Description of parameter `embedding_size`.
+    :param type transformer_ff_dim: Description of parameter `transformer_ff_dim`.
+    :param type transformer_nbr_heads: Description of parameter `transformer_nbr_heads`.
+    :param type transformer_nbr_encoders: Description of parameter `transformer_nbr_encoders`.
+    :param type transformer_nbr_decoders: Description of parameter `transformer_nbr_decoders`.
+    :param type extractor: Description of parameter `extractor`.
+    :param type reuse: Description of parameter `reuse`.
+    :param type scale_features: Description of parameter `scale_features`.
+    :param type **kwargs: Description of parameter `**kwargs`.
     """
 
     recurrent = True
@@ -54,9 +61,14 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
         n_env,
         n_steps,
         n_batch,
-        memory_size=100,
+        memory_size=128,
         embedding_size=64,
+        transformer_ff_dim=128,
+        transformer_nbr_heads=8,
+        transformer_nbr_encoders=6,
+        transformer_nbr_decoders=6,
         extractor=None,
+        post_processor=None,
         reuse=False,
         scale_features=False,
         **kwargs,
@@ -86,6 +98,9 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
             assert extracted_features.shape[-1] == tf.Dimension(
                 embedding_size
             ), f"embedding_size not correct: {extracted_features.shape[-1]} vs {embedding_size}"
+            assert (
+                memory_size % nbr_heads == 0
+            ), "nbr_heads must be a factor of the memory_size"
 
             # Transform from (batch x seq, ... ) into (batch, seq, ...) shape
             sequence_input = tf.reshape(
@@ -146,14 +161,16 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
                 observation=tiled_obs,
                 memory=memory,
                 dim_model=embedding_size,
-                dim_ff=50,
-                nbr_heads=2,
-                nbr_encoders=1,
-                nbr_decoders=1,
+                dim_ff=transformer_ff_dim,
+                nbr_heads=transformer_nbr_heads,
+                nbr_encoders=transformer_nbr_encoders,
+                nbr_decoders=transformer_nbr_decoders,
                 input_mask=tiled_mask,
                 target_mask=None,
             )
             flat_out = tf.keras.layers.Flatten()(trans_out)
+            if post_processor is not None:
+                flat_out = post_processor(flat_out, **kwargs)
             value_fn = linear(flat_out, "vf", 1)
 
             self._proba_distribution, self._policy, self.q_value = self.pdtype.proba_distribution_from_latent(
