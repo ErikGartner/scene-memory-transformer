@@ -22,7 +22,7 @@ class CustomSceneMemoryPolicy1(SceneMemoryPolicy):
         n_env,
         n_steps,
         n_batch,
-        n_lstm=128,
+        embedding_size=4,
         reuse=False,
         **_kwargs
     ):
@@ -33,11 +33,8 @@ class CustomSceneMemoryPolicy1(SceneMemoryPolicy):
             n_env,
             n_steps,
             n_batch,
-            n_lstm,
-            reuse,
-            layers=[64, 64],
-            layer_norm=False,
-            feature_extraction="mlp",
+            embedding_size=embedding_size,
+            reuse=reuse,
             **_kwargs
         )
 

@@ -8,6 +8,10 @@ from collections import deque
 import numpy as np
 import tensorflow as tf
 
+"""
+The numpy / python implementation of a circular buffer / memory
+"""
+
 
 class Memory(object):
     def __init__(self, memory_size: int, embedding_size: int) -> None:
@@ -72,6 +76,11 @@ class Memory(object):
         return len(self.embeddings)
 
 
+"""
+The Tensorflow implementation of the memory
+"""
+
+
 def update_memory(
     observation: tf.Tensor, memory: tf.Tensor, mask: tf.Tensor, reset: tf.Tensor
 ):
@@ -111,8 +120,8 @@ def sequence_update_memory(
     :param tf.Tensor start_memory: Shape: (memory_size, embedding_size)
     :param tf.Tensor start_mask: Shape: (memory_size)
     :param tf.Tensor dones_ph: Shape: (sequence_size)
-    :return: Description of returned object.
-    :rtype: type
+    :return: Returns a tuple of the new memory, mask and the new state.
+    :rtype: (tf.Tensor, tf.Tensor, tf.Tensor)
 
     """
     assert (
@@ -170,8 +179,8 @@ def batch_update_memory(
     :param tf.Tensor start_memory: Shape: (batch, memory_size, embedding_size)
     :param tf.Tensor start_mask: Shape: (batch, memory_size)
     :param tf.Tensor dones_ph: Shape: (batch, sequence_size)
-    :return: Description of returned object.
-    :rtype: type
+    :return: Returns a tuple of the new memory, mask and the new state.
+    :rtype: (tf.Tensor, tf.Tensor, tf.Tensor)
 
     """
     assert (

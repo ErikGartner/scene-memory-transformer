@@ -54,13 +54,11 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
         n_env,
         n_steps,
         n_batch,
-        n_lstm=256,
+        memory_size=100,
+        embedding_size=64,
+        extractor=None,
         reuse=False,
-        layers=None,
-        act_fun=tf.tanh,
-        cnn_extractor=nature_cnn,
-        layer_norm=False,
-        feature_extraction="cnn",
+        scale_features=False,
         **kwargs,
     ):
         super(SceneMemoryPolicy, self).__init__(
@@ -70,92 +68,26 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
             n_env,
             n_steps,
             n_batch,
-            state_shape=(100, 64 + 1),
+            state_shape=(memory_size, embedding_size + 1),
             reuse=reuse,
-            scale=(feature_extraction == "cnn"),
+            scale=scale_features,
         )
 
-        self._kwargs_check(feature_extraction, kwargs)
-
-        if layers is None:
-            layers = [64, 64]
-        else:
-            warnings.warn(
-                "The layers parameter is deprecated. Use the net_arch parameter instead."
-            )
-
         with tf.variable_scope("model", reuse=reuse):
-            if feature_extraction == "cnn":
-                extracted_features = cnn_extractor(self.processed_obs, **kwargs)
+            if extractor is not None:
+                ext = extractor(self.processed_obs, **kwargs)
             else:
-                extracted_features = tf.layers.flatten(self.processed_obs)
-                for i, layer_size in enumerate(layers):
-                    extracted_features = act_fun(
-                        linear(
-                            extracted_features,
-                            "pi_fc" + str(i),
-                            n_hidden=layer_size,
-                            init_scale=np.sqrt(2),
-                        )
-                    )
+                ext = self.processed_obs
 
-            print("Extracted features", extracted_features)
-            input_sequence = batch_to_seq(extracted_features, self.n_env, n_steps)
-            masks = batch_to_seq(self.dones_ph, self.n_env, n_steps)
-
-            print(
-                f"extracted_features: {extracted_features.shape}, input_sequence len: {len(input_sequence)}, {input_sequence[0].shape}, masks len: {len(masks)}, {masks[0].shape}"
+            extracted_features = linear(
+                tf.keras.layers.Flatten()(ext), "extracted_features", embedding_size
             )
 
-            self.embedding = extracted_features
-            memory_size = 100
-            embedding_size = extracted_features.shape.as_list()[-1]
+            assert extracted_features.shape[-1] == tf.Dimension(
+                embedding_size
+            ), f"embedding_size not correct: {extracted_features.shape[-1]} vs {embedding_size}"
 
-            current_obs = extracted_features
-            tiled_obs = tf.tile(
-                tf.reshape(current_obs, (n_batch, 1, embedding_size)),
-                (1, memory_size, 1),
-            )
-            print("tiled_obs", tiled_obs)
-
-            # Create SMT module
-
-            # self._input_mask_ph = tf.placeholder(
-            #     tf.float32, name="input_mask", shape=(n_batch, memory_size)
-            # )
-            # input_mask_tiled = tf.tile(
-            #     tf.expand_dims(self._input_mask_ph, 1), (1, memory_size, 1)
-            # )
-            # # self._target_mask_ph = tf.placeholder(
-            # #     tf.float32,
-            # #     name="target_mask",
-            # #     shape=(n_batch, memory_size, memory_size),
-            # # )
-            # self._memory_ph = tf.placeholder(
-            #     tf.float32, name="memory", shape=(n_batch, memory_size, embedding_size)
-            # )
-            print(
-                f"states_ph: {self.states_ph.shape}, self.dones_ph: {self.dones_ph.shape}"
-            )
-
-            # # Split the states input into memory and input put mask
-            # if self.states_ph.shape[0] == tf.Dimension(1):
-            #     memory = tf.squeeze(self.states_ph[:, :, :-1], axis=[0])
-            #     input_mask = tf.squeeze(self.states_ph[:, :, -1:], axis=[0, -1])
-            #     batch_memory, batch_mask, new_state = batch_update_memory(
-            #         observations=current_obs,
-            #         start_memory=memory,
-            #         start_mask=input_mask,
-            #         dones_ph=self.dones_ph,
-            #     )
-            #     self.snew = new_state
-            # else:
-            #     # Multiple environments in parallell
-            #     batch_memory = self.states_ph[:, :, :-1]
-            #     batch_mask = tf.squeeze(self.states_ph[:, :, -1:], axis=[-1])
-            #     self.snew = self.states_ph[:, :, :]
-
-            # Transform into (batch, seq, ...) shape
+            # Transform from (batch x seq, ... ) into (batch, seq, ...) shape
             sequence_input = tf.reshape(
                 extracted_features,
                 (self.n_env, n_steps, embedding_size),
@@ -175,18 +107,15 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
             sequence_mask = tf.squeeze(
                 sequence_state[:, :, :, -1:], axis=[1, 3], name="sequence_mask"
             )
-            print(
-                f"sequence_input: {sequence_input}, sequence_state: {sequence_state}, sequence_done: {sequence_done}, sequence_memory: {sequence_memory}, sequence_mask: {sequence_mask}"
-            )
 
+            # Update the memory states for all observations taking batches and
+            # sequences into account.
             batch_memory, batch_mask, batch_new_state = batch_update_memory(
                 observations=sequence_input,
                 start_memory=sequence_memory,
                 start_mask=sequence_mask,
                 dones_ph=sequence_done,
             )
-
-            print(f"n_batch: {n_batch}")
 
             # Transform back into (batch, ...) format
             memory = tf.reshape(batch_memory, (n_batch, memory_size, embedding_size))
@@ -201,10 +130,18 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
                 tf.reshape(mask, (n_batch, 1, memory_size)), (1, memory_size, 1)
             )
 
-            print(
-                f"batch_memory: {batch_memory}, input_mask: {batch_mask}, self.snew: {self.snew}, tiled_mask: {tiled_mask}, tiled_obs: {tiled_obs}, memory: {memory}"
+            # We need to tile the observation in the (transformer's) sequence
+            # dimension. We do this since we use the current observation as the
+            # context when attending each memory cell in the sequence.
+            tiled_obs = tf.tile(
+                tf.reshape(extracted_features, (n_batch, 1, embedding_size)),
+                (1, memory_size, 1),
             )
 
+            # Create the transformer.
+            # Note that here the batch and seq has been turned into a single
+            # dimension. This is due to that fact that we use sequence dimension
+            # in the transformer to represent the memory dimension.
             trans_out = create_transformer(
                 observation=tiled_obs,
                 memory=memory,
@@ -226,7 +163,6 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
         self._value_fn = value_fn
 
         self._setup_init()
-        print("SETUP DONE!")
 
     def step(self, obs, state=None, mask=None, deterministic=False):
         if deterministic:
