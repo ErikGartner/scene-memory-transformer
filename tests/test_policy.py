@@ -81,7 +81,7 @@ LSTM_POLICIES = [CustomSceneMemoryPolicy1]
 
 @pytest.mark.parametrize("model_class", MODELS)
 @pytest.mark.parametrize("policy", LSTM_POLICIES)
-def test_lstm_policy(request, model_class, policy):
+def test_scene_memory_policy(request, model_class, policy):
     model_fname = "./test_model_{}.pkl".format(request.node.name)
 
     try:
@@ -109,7 +109,7 @@ def test_lstm_policy(request, model_class, policy):
             os.remove(model_fname)
 
 
-def test_lstm_train():
+def test_smt_train():
     """Test that LSTM models are able to achieve >=150 (out of 500) reward on CartPoleNoVelEnv.
     This environment requires memory to perform well in."""
 
