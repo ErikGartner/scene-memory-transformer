@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from stable_baselines import A2C, ACER, ACKTR, PPO2, bench
+from stable_baselines.common.policies import MlpLstmPolicy, LstmPolicy
 from memory.policy import SceneMemoryPolicy
 from stable_baselines.common.vec_env import SubprocVecEnv
 from stable_baselines.common.vec_env.vec_normalize import VecNormalize
@@ -134,6 +135,53 @@ def test_smt_train():
         cliprange=0.2,
         verbose=1,
         tensorboard_log="./logs/",
+    )
+
+    eprewmeans = []
+
+    def reward_callback(local, _):
+        nonlocal eprewmeans
+        eprewmeans.append(safe_mean([ep_info["r"] for ep_info in local["ep_info_buf"]]))
+
+    model.learn(total_timesteps=100000, seed=0, callback=reward_callback)
+
+    # Maximum episode reward is 500.
+    # In CartPole-v1, a non-recurrent policy can easily get >= 450.
+    # In CartPoleNoVelEnv, a non-recurrent policy doesn't get more than ~50.
+    # LSTM policies can reach above 400, but it varies a lot between runs; consistently get >=150.
+    # See PR #244 for more detailed benchmarks.
+
+    average_reward = sum(eprewmeans[-NUM_EPISODES_FOR_SCORE:]) / NUM_EPISODES_FOR_SCORE
+    assert (
+        average_reward >= 150
+    ), "Mean reward below 150; per-episode rewards {}".format(average_reward)
+
+
+@pytest.mark.skip(reason="this tests the official LSTM implementation as a reference")
+def test_lstm_train():
+    """Test that LSTM models are able to achieve >=150 (out of 500) reward on CartPoleNoVelEnv.
+    This environment requires memory to perform well in."""
+
+    def make_env(i):
+        env = CartPoleNoVelEnv()
+        env = bench.Monitor(env, None, allow_early_resets=True)
+        env.seed(i)
+        return env
+
+    env = SubprocVecEnv([lambda: make_env(i) for i in range(NUM_ENVS)])
+    env = VecNormalize(env)
+    model = PPO2(
+        MlpLstmPolicy,
+        env,
+        n_steps=128,
+        nminibatches=NUM_ENVS,
+        lam=0.95,
+        gamma=0.99,
+        noptepochs=10,
+        ent_coef=0.0,
+        learning_rate=3e-4,
+        cliprange=0.2,
+        verbose=1,
     )
 
     eprewmeans = []
