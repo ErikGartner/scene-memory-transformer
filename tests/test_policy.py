@@ -182,6 +182,7 @@ def test_lstm_train():
         learning_rate=3e-4,
         cliprange=0.2,
         verbose=1,
+        tensorboard_log="./logs/",
     )
 
     eprewmeans = []
