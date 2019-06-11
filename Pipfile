@@ -9,8 +9,8 @@ pytest = "*"
 [packages]
 stable-baselines = "*"
 gym = "*"
-tensorflow = "*"
+tensorflow = "~=1.12.0"
 numpy = "*"
 
 [requires]
-python_version = "3.7"
+python_version = "3.6"

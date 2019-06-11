@@ -99,7 +99,9 @@ def update_memory(
     new_memory = memory * (1 - reset)
 
     # Shift memory forward and add new observation
-    new_memory = tf.concat([tf.expand_dims(observation, 0), new_memory[:-1, :]], axis=0)
+    new_memory = tf.concat(
+        [tf.expand_dims(observation, 0), new_memory[:-1, :]], axis=0
+    )
 
     # Update mask
     new_mask = mask * (1 - reset)
@@ -138,14 +140,19 @@ def sequence_update_memory(
     new_mask = start_mask
     for seq_idx in range(nbr_obs):
         new_mem, new_mask = update_memory(
-            tf.squeeze(obs[seq_idx]), new_mem, new_mask, tf.squeeze(dones[seq_idx])
+            tf.squeeze(obs[seq_idx]),
+            new_mem,
+            new_mask,
+            tf.squeeze(dones[seq_idx]),
         )
         masks.append(new_mask)
         memories.append(new_mem)
 
     new_state = tf.expand_dims(
         tf.concat(
-            [new_mem, tf.expand_dims(new_mask, axis=1)], axis=1, name="new_state"
+            [new_mem, tf.expand_dims(new_mask, axis=1)],
+            axis=1,
+            name="new_state",
         ),
         axis=0,
     )
@@ -195,6 +202,13 @@ def batch_update_memory(
         == start_mask.shape[0]
         == start_memory.shape[0]
     ), "Batch size should agree for all inputs."
+    assert (
+        observations.shape[-1] == start_memory.shape[-1]
+    ), "Embedding sizes should agreee"
+    assert start_memory.shape[1] == start_mask[1], "Memory sizes should agree"
+    assert (
+        dones_ph.shape[-1] == observations.shape[-1]
+    ), "Sequence sizes should agree"
 
     batch_size = observations.shape.as_list()[0]
 
