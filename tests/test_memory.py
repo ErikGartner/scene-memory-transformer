@@ -48,12 +48,16 @@ def test_update_memory():
     sess = tf.Session()
     with sess:
         observations = tf.constant(
-            np.tile(np.arange(1, batch_size + 1), (embed_size, 1)).T, dtype=tf.float32
+            np.tile(np.arange(1, batch_size + 1), (embed_size, 1)).T,
+            dtype=tf.float32,
         )
-        memory = tf.constant(np.zeros((memory_size, embed_size), dtype=np.float32))
+        memory = tf.constant(
+            np.zeros((memory_size, embed_size), dtype=np.float32)
+        )
         mask = tf.constant(np.zeros(memory_size, dtype=np.float32))
         done_ph = tf.constant(np.array([0, 0, 0, 1, 0, 0, 0, 0, 1, 0]))
 
+        # Test the function
         new_mem = memory
         new_mask = mask
         for idx in range(batch_size):
@@ -65,6 +69,7 @@ def test_update_memory():
                 tf.squeeze(done_ph[idx]),
             )
 
+        # Test the sequence version
         batch_memory, batch_mask, new_state = sequence_update_memory(
             observations, memory, mask, done_ph
         )
@@ -85,3 +90,30 @@ def test_update_memory():
         corr_mask[1, 0:2] = 1
         corr_mask[2, 0:3] = 1
         np.testing.assert_equal(mask_np[0:3, :], corr_mask)
+
+
+def test_compare_implementations():
+    """Compares the results of the TF and NP implementation of the SMT memory"""
+    batch_size = 16
+    memory_size = 20
+    embed_size = 10
+
+    # We have one np memory for each batch
+    memories = [
+        Memory(memory_size=memory_size, embedding_size=embed_size)
+        for _ in range(batch_size)
+    ]
+
+    # We create a start memory and mask for all batches
+    memory = tf.zeros((batch_size, memory_size, embed_size))
+    mask = tf.zeros((batch_size, memory_size))
+
+    sequence_length = 100
+    for batch_idx in range(batch_size):
+        for seq_idx in range(sequence_length):
+            # Generate a random observation for this batch and step
+            obs_np = np.random.rand(embed_size)
+            obs_tf = tf.constant(obs_np)
+
+            # Add to np memory
+            memories.add_embedding(obs_np)

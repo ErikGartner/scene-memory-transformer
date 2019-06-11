@@ -205,9 +205,9 @@ def batch_update_memory(
     assert (
         observations.shape[-1] == start_memory.shape[-1]
     ), "Embedding sizes should agreee"
-    assert start_memory.shape[1] == start_mask[1], "Memory sizes should agree"
+    assert start_memory.shape[1] == start_mask.shape[1], "Memory sizes should agree"
     assert (
-        dones_ph.shape[-1] == observations.shape[-1]
+        dones_ph.shape[1] == observations.shape[1]
     ), "Sequence sizes should agree"
 
     batch_size = observations.shape.as_list()[0]
@@ -215,21 +215,23 @@ def batch_update_memory(
     masks = []
     memories = []
     new_states = []
-    for batch_idx in range(batch_size):
-        with tf.variable_scope(f"batch_memory_{batch_idx}"):
-            new_mem, new_mask, new_state = sequence_update_memory(
-                observations[batch_idx, :, :],
-                start_memory[batch_idx, :, :],
-                start_mask[batch_idx, :],
-                dones_ph[batch_idx, :],
-            )
-        masks.append(new_mask)
-        memories.append(new_mem)
-        new_states.append(new_state)
 
-    batch_memory = tf.stack(memories, axis=0, name="batch_memory")
-    batch_mask = tf.stack(masks, axis=0, name="batch_mask")
-    batch_new_state = tf.stack(new_states, axis=0, name="batch_new_state")
+    with tf.variable_scope("memory"):
+        for batch_idx in range(batch_size):
+            with tf.variable_scope(f"batch_{batch_idx}"):
+                new_mem, new_mask, new_state = sequence_update_memory(
+                    observations[batch_idx, :, :],
+                    start_memory[batch_idx, :, :],
+                    start_mask[batch_idx, :],
+                    dones_ph[batch_idx, :],
+                )
+            masks.append(new_mask)
+            memories.append(new_mem)
+            new_states.append(new_state)
+
+        batch_memory = tf.stack(memories, axis=0, name="batch_memory")
+        batch_mask = tf.stack(masks, axis=0, name="batch_mask")
+        batch_new_state = tf.stack(new_states, axis=0, name="batch_new_state")
     return batch_memory, batch_mask, batch_new_state
 
 

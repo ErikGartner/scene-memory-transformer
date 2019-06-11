@@ -4,6 +4,7 @@ from gym.envs.classic_control import CartPoleEnv
 from gym.wrappers.time_limit import TimeLimit
 from gym import spaces
 import numpy as np
+import tensorflow as tf
 import pytest
 
 from stable_baselines import A2C, ACER, ACKTR, PPO2, bench
@@ -12,6 +13,13 @@ from memory.policy import SceneMemoryPolicy
 from stable_baselines.common.vec_env import SubprocVecEnv
 from stable_baselines.common.vec_env.vec_normalize import VecNormalize
 from stable_baselines.ppo2.ppo2 import safe_mean
+from stable_baselines.a2c.utils import linear
+
+
+def post_processor(inp, **kwargs):
+    """Layers applied after the SMT, but before the softmax"""
+    out = tf.nn.tanh(linear(inp, "post1", 64, init_scale=np.sqrt(2)))
+    return out
 
 
 class CustomSceneMemoryPolicy1(SceneMemoryPolicy):
@@ -23,12 +31,12 @@ class CustomSceneMemoryPolicy1(SceneMemoryPolicy):
         n_env,
         n_steps,
         n_batch,
-        memory_size=32,
-        embedding_size=8,
-        transformer_ff_dim=128,
-        transformer_nbr_heads=2,
-        transformer_nbr_encoders=2,
-        transformer_nbr_decoders=2,
+        memory_size=128,
+        embedding_size=4,
+        transformer_ff_dim=32,
+        transformer_nbr_heads=1,
+        transformer_nbr_encoders=3,
+        transformer_nbr_decoders=3,
         reuse=False,
         **_kwargs
     ):
@@ -46,6 +54,7 @@ class CustomSceneMemoryPolicy1(SceneMemoryPolicy):
             transformer_nbr_encoders=transformer_nbr_encoders,
             transformer_nbr_decoders=transformer_nbr_encoders,
             reuse=reuse,
+            post_processor=post_processor,
             **_kwargs
         )
 
@@ -73,7 +82,7 @@ class CartPoleNoVelEnv(CartPoleEnv):
 
 
 N_TRIALS = 100
-NUM_ENVS = 16
+NUM_ENVS = 1
 NUM_EPISODES_FOR_SCORE = 10
 
 MODELS = [A2C, PPO2]
@@ -143,7 +152,7 @@ def test_smt_train():
         nonlocal eprewmeans
         eprewmeans.append(safe_mean([ep_info["r"] for ep_info in local["ep_info_buf"]]))
 
-    model.learn(total_timesteps=100000, seed=0, callback=reward_callback)
+    model.learn(total_timesteps=1000000, seed=0, callback=reward_callback)
 
     # Maximum episode reward is 500.
     # In CartPole-v1, a non-recurrent policy can easily get >= 450.
