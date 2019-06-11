@@ -89,10 +89,10 @@ def pointwise_feedforward(
 
     out = x
     with tf.variable_scope(scope):
-        out = tf.keras.layers.Conv1D(
+        out = tf.layers.conv1d(out,
             filters=dim_ff, kernel_size=1, activation=tf.nn.relu
-        )(out)
-        out = tf.keras.layers.Conv1D(filters=dim_model, kernel_size=1)(out)
+        )
+        out = tf.layers.conv1d(out, filters=dim_model, kernel_size=1)
 
     return out
 

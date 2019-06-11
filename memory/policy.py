@@ -94,7 +94,7 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
                 ext = self.processed_obs
 
             extracted_features = linear(
-                tf.keras.layers.Flatten()(ext), "extracted_features", embedding_size
+                tf.layers.flatten(ext), "extracted_features", embedding_size
             )
 
             assert extracted_features.shape[-1] == tf.Dimension(
@@ -167,7 +167,7 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
                 input_mask=tiled_mask,
                 target_mask=None,
             )
-            flat_out = tf.keras.layers.Flatten()(trans_out)
+            flat_out = tf.layers.flatten(trans_out)
             if post_processor is not None:
                 flat_out = post_processor(flat_out, **kwargs)
             value_fn = linear(flat_out, "vf", 1)
