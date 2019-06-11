@@ -25,7 +25,7 @@ class CustomSceneMemoryPolicy1(SceneMemoryPolicy):
         n_batch,
         memory_size=32,
         embedding_size=8,
-        transformer_ff_dim=32,
+        transformer_ff_dim=128,
         transformer_nbr_heads=2,
         transformer_nbr_encoders=2,
         transformer_nbr_decoders=2,

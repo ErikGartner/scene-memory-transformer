@@ -11,7 +11,7 @@ def scaled_dot_product_attention(
     K: tf.Tensor,
     V: tf.Tensor,
     dim_model: int,
-    mask: int = None,
+    mask: tf.Tensor = None,
     scope: str = "sdp_attention",
 ) -> tf.Tensor:
     assert Q.shape[-1] == K.shape[-1] == V.shape[-1]
@@ -21,7 +21,8 @@ def scaled_dot_product_attention(
         out = tf.matmul(Q, tf.transpose(K, [0, 2, 1]))
 
         # Scale by dimension
-        out = out / tf.sqrt(tf.cast(dim_model, tf.float32))
+        factor = Q.shape.as_list()[-1]
+        out = out / tf.sqrt(tf.cast(factor, tf.float32))
 
         if mask is not None:
             # Set to -Inf for 0 in mask
@@ -66,7 +67,11 @@ def multihead_attention(
 
         # Apply scaled dot product attention
         out = scaled_dot_product_attention(
-            Q=Q_split, K=K_split, V=V_split, mask=mask_split, dim_model=dim_model
+            Q=Q_split,
+            K=K_split,
+            V=V_split,
+            mask=mask_split,
+            dim_model=dim_model,
         )
 
         # Merge the multi-head back to the original shape
@@ -76,7 +81,10 @@ def multihead_attention(
 
 
 def pointwise_feedforward(
-    x: tf.Tensor, dim_ff: int, dim_model: int, scope: str = "pointwise_feedforward"
+    x: tf.Tensor,
+    dim_ff: int,
+    dim_model: int,
+    scope: str = "pointwise_feedforward",
 ) -> tf.Tensor:
 
     out = x
@@ -113,7 +121,10 @@ def encoder_layer(
             scale=True,
         )
         out = tc.layers.layer_norm(
-            out + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model)
+            out
+            + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model),
+            center=True,
+            scale=True,
         )
 
     return out
@@ -164,7 +175,7 @@ def decoder_layer(
                 nbr_heads=nbr_heads,
                 dim_model=dim_model,
                 mask=target_mask,
-                scope="multihead_attention_0",
+                scope="self_attn",
             ),
             center=True,
             scale=True,
@@ -177,13 +188,14 @@ def decoder_layer(
                 nbr_heads=nbr_heads,
                 dim_model=dim_model,
                 mask=input_mask,
-                scope="multihead_attention_1",
+                scope="decorder_attn",
             ),
             center=True,
             scale=True,
         )
         out = tc.layers.layer_norm(
-            out + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model),
+            out
+            + pointwise_feedforward(x=out, dim_ff=dim_ff, dim_model=dim_model),
             center=True,
             scale=True,
         )
@@ -230,6 +242,9 @@ def create_transformer(
     input_mask: tf.Tensor = None,
     target_mask: tf.Tensor = None,
 ):
+    assert (
+        dim_model % nbr_heads == 0
+    ), "dim_model must be divisible by nbr_heads"
     enc = encoder(
         memory=memory,
         nbr_encoders=nbr_encoders,
