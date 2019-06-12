@@ -1,5 +1,8 @@
+import time
+
 import numpy as np
 import tensorflow as tf
+import pytest
 
 from memory.memory import (
     Memory,
@@ -92,28 +95,85 @@ def test_update_memory():
         np.testing.assert_equal(mask_np[0:3, :], corr_mask)
 
 
-def test_compare_implementations():
+tries = 5
+batch_sizes = np.random.randint(1, 5, tries)
+memory_sizes = np.random.randint(1, 20, tries)
+sequence_lengths = np.random.randint(1, 20, tries)
+test_params = [
+    (int(batch_sizes[x]), int(memory_sizes[x]), int(sequence_lengths[x]))
+    for x in range(tries)
+]
+
+
+@pytest.mark.parametrize("batch_size,memory_size,sequence_length", test_params)
+def test_compare_implementations(batch_size, memory_size, sequence_length):
     """Compares the results of the TF and NP implementation of the SMT memory"""
-    batch_size = 16
-    memory_size = 20
-    embed_size = 10
+    with tf.Session() as sess:
 
-    # We have one np memory for each batch
-    memories = [
-        Memory(memory_size=memory_size, embedding_size=embed_size)
-        for _ in range(batch_size)
-    ]
+        embed_size = 10
 
-    # We create a start memory and mask for all batches
-    memory = tf.zeros((batch_size, memory_size, embed_size))
-    mask = tf.zeros((batch_size, memory_size))
+        # We have one np memory for each batch
+        memories = [
+            Memory(memory_size=memory_size, embedding_size=embed_size)
+            for _ in range(batch_size)
+        ]
 
-    sequence_length = 100
-    for batch_idx in range(batch_size):
+        # We create a start memory and mask for all batches
+        memory_tf = tf.zeros(
+            (batch_size, memory_size, embed_size), dtype=tf.float32
+        )
+        mask_tf = tf.zeros((batch_size, memory_size), dtype=tf.float32)
+        done_np = np.random.choice(
+            [0, 1], (batch_size, sequence_length), True, p=[0.9, 0.1]
+        )
+        done_tf = tf.constant(done_np, dtype=tf.float32)
+
+        total_obs = []
         for seq_idx in range(sequence_length):
-            # Generate a random observation for this batch and step
-            obs_np = np.random.rand(embed_size)
-            obs_tf = tf.constant(obs_np)
 
-            # Add to np memory
-            memories.add_embedding(obs_np)
+            batch_obs = []
+
+            # Batches are parallel memories for parallel environments
+            for batch_idx in range(batch_size):
+                # Generate random observation
+                obs_np = np.array(np.random.rand(embed_size), dtype=np.float32)
+                batch_obs.append(tf.constant(obs_np, dtype=tf.float32))
+
+                if done_np[batch_idx, seq_idx] == 1:
+                    # if done, reset memory
+                    memories[batch_idx].reset()
+
+                # Add to memory
+                memories[batch_idx].add_embedding(obs_np)
+
+            # Gather observations into batches of sequences
+            batch_obs_tf = tf.stack(batch_obs)  # (batch, embed)
+            total_obs.append(batch_obs_tf)
+
+        input_obs = tf.stack(total_obs, axis=1)  # (batch, seq, embed)
+        batch_memory, batch_mask, batch_new_state = batch_update_memory(
+            input_obs, memory_tf, mask_tf, done_tf
+        )
+
+        # Verify outputs
+        tf_res_memory, tf_res_mask, tf_res_new_state = sess.run(
+            [batch_memory, batch_mask, batch_new_state]
+        )
+
+        # Compare results
+        for batch_idx, memory in enumerate(memories):
+            np.testing.assert_array_equal(
+                tf_res_memory[batch_idx, -1, :, :],
+                memory.get_state(),
+                "Incorrect memory after batch update",
+            )
+            np.testing.assert_array_equal(
+                tf_res_mask[batch_idx, -1, :],
+                memory.get_mask(),
+                "Incorrect mask after batch update",
+            )
+            np.testing.assert_array_equal(
+                np.squeeze(tf_res_new_state[batch_idx, :, :], axis=0),
+                memory.get_statemask(),
+                "Incorrect new state after batch update",
+            )

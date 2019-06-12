@@ -8,12 +8,13 @@ from collections import deque
 import numpy as np
 import tensorflow as tf
 
-"""
-The numpy / python implementation of a circular buffer / memory
-"""
-
 
 class Memory(object):
+    """
+    The numpy reference implementation of a circular buffer / memory.
+    Used to test the Tensorflow implementation.
+    """
+
     def __init__(self, memory_size: int, embedding_size: int) -> None:
         self.memory_size = memory_size
         self.embedding_size = embedding_size
@@ -77,7 +78,7 @@ class Memory(object):
 
 
 """
-The Tensorflow implementation of the memory
+The Tensorflow implementation of the memory.
 """
 
 
@@ -205,7 +206,9 @@ def batch_update_memory(
     assert (
         observations.shape[-1] == start_memory.shape[-1]
     ), "Embedding sizes should agreee"
-    assert start_memory.shape[1] == start_mask.shape[1], "Memory sizes should agree"
+    assert (
+        start_memory.shape[1] == start_mask.shape[1]
+    ), "Memory sizes should agree"
     assert (
         dones_ph.shape[1] == observations.shape[1]
     ), "Sequence sizes should agree"
