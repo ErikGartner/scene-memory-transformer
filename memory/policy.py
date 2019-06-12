@@ -22,7 +22,10 @@ from stable_baselines.common.distributions import (
     BernoulliProbabilityDistribution,
 )
 from stable_baselines.common.input import observation_input
-from stable_baselines.common.policies import RecurrentActorCriticPolicy, nature_cnn
+from stable_baselines.common.policies import (
+    RecurrentActorCriticPolicy,
+    nature_cnn,
+)
 
 from .memory import batch_update_memory
 from .blocks import create_transformer
@@ -93,9 +96,7 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
             else:
                 ext = self.processed_obs
 
-            extracted_features = linear(
-                tf.layers.flatten(ext), "extracted_features", embedding_size
-            )
+            extracted_features = tf.layers.flatten(ext)
 
             assert extracted_features.shape[-1] == tf.Dimension(
                 embedding_size
@@ -132,7 +133,9 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
             )
 
             # Transform back into (batch, ...) format
-            memory = tf.reshape(batch_memory, (n_batch, memory_size, embedding_size))
+            memory = tf.reshape(
+                batch_memory, (n_batch, memory_size, embedding_size)
+            )
             mask = tf.reshape(batch_mask, (n_batch, memory_size))
             new_state = tf.reshape(
                 batch_new_state, (n_env, memory_size, embedding_size + 1)
@@ -177,13 +180,17 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
             )
 
         self._value_fn = value_fn
-
         self._setup_init()
 
     def step(self, obs, state=None, mask=None, deterministic=False):
         if deterministic:
             return self.sess.run(
-                [self.deterministic_action, self.value_flat, self.snew, self.neglogp],
+                [
+                    self.deterministic_action,
+                    self.value_flat,
+                    self.snew,
+                    self.neglogp,
+                ],
                 {self.obs_ph: obs, self.states_ph: state, self.dones_ph: mask},
             )
         else:
