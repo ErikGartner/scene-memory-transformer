@@ -8,7 +8,7 @@ pytest = "*"
 
 [packages]
 stable-baselines = "*"
-gym = "*"
+gym = {extras = ["atari"],version = "*"}
 tensorflow = "~=1.12.0"
 numpy = "*"
 
