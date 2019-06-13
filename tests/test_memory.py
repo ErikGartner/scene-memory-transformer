@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 import pytest
 
-from memory.memory import (
+from smt.memory import (
     Memory,
     update_memory,
     batch_update_memory,

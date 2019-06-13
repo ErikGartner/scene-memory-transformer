@@ -14,7 +14,7 @@ from stable_baselines.common.policies import (
     LstmPolicy,
     nature_cnn,
 )
-from memory.policy import SceneMemoryPolicy
+from smt.policy import SceneMemoryPolicy
 from stable_baselines.common.vec_env import SubprocVecEnv
 from stable_baselines.common.vec_env.vec_normalize import VecNormalize
 from stable_baselines.ppo2.ppo2 import safe_mean
@@ -37,7 +37,7 @@ class CustomSceneMemoryPolicyCartPole(SceneMemoryPolicy):
         n_steps,
         n_batch,
         memory_size=128,
-        embedding_size=2,
+        embedding_size=4,
         transformer_ff_dim=32,
         transformer_nbr_heads=1,
         transformer_nbr_encoders=3,

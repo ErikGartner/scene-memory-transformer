@@ -15,7 +15,7 @@ from stable_baselines.common.policies import (
     CnnLstmPolicy,
     nature_cnn,
 )
-from memory.policy import SceneMemoryPolicy
+from smt.policy import SceneMemoryPolicy
 from stable_baselines.common.vec_env import SubprocVecEnv
 from stable_baselines.common.vec_env.vec_normalize import VecNormalize
 from stable_baselines.ppo2.ppo2 import safe_mean

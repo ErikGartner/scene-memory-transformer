@@ -1,0 +1,19 @@
+[tool.poetry]
+name = "smt"
+version = "0.1.0"
+description = "The scene memory transformer implemented in Tensorflow"
+authors = ["Erik Gärtner <erik@gartner.io>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.6"
+tensorflow = "~1.12.2"
+stable-baselines = "^2.5.1"
+
+[tool.poetry.dev-dependencies]
+pytest = "^4.6"
+gym = {version = "^0.12.5",extras = ["atari"]}
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"

@@ -28,7 +28,7 @@ from stable_baselines.common.policies import (
 )
 
 from .memory import batch_update_memory
-from .blocks import create_transformer
+from .transformer import create_transformer
 
 
 class SceneMemoryPolicy(RecurrentActorCriticPolicy):

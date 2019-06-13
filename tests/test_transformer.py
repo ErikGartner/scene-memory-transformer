@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-from memory.blocks import *
+from smt.transformer import *
 
 
 def test_intitialize_transformer():
@@ -15,10 +15,12 @@ def test_intitialize_transformer():
     sess = tf.Session()
     with sess:
         observations = tf.constant(
-            np.random.rand(batch_size, memory_size, embed_size), dtype=tf.float32
+            np.random.rand(batch_size, memory_size, embed_size),
+            dtype=tf.float32,
         )
         current_obs = tf.constant(
-            np.random.rand(batch_size, memory_size, embed_size), dtype=tf.float32
+            np.random.rand(batch_size, memory_size, embed_size),
+            dtype=tf.float32,
         )
         input_mask = tf.constant(
             np.ones((batch_size, memory_size, memory_size)), dtype=tf.float32
@@ -56,7 +58,12 @@ def test_intitialize_transformer():
         print(f"Logits: {logits.shape}")
 
         # Write graph to tensorboard log
-        sess.run([tf.global_variables_initializer(), tf.local_variables_initializer()])
+        sess.run(
+            [
+                tf.global_variables_initializer(),
+                tf.local_variables_initializer(),
+            ]
+        )
         sess.run(logits)
         writer = tf.summary.FileWriter("logs", sess.graph)
         writer.close()
