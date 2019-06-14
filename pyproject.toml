@@ -7,7 +7,7 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = "^3.6"
-tensorflow = "~1.12.2"
+tensorflow-gpu = "~1.12.2"
 stable-baselines = "^2.5.1"
 
 [tool.poetry.dev-dependencies]

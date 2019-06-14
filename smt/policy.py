@@ -91,10 +91,11 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
         )
 
         with tf.variable_scope("model", reuse=reuse):
+            ext = self.processed_obs
+
             if extractor is not None:
-                ext = extractor(self.processed_obs, **kwargs)
-            else:
-                ext = self.processed_obs
+                with tf.variable_scope("extractor"):
+                    ext = extractor(self.processed_obs, **kwargs)
 
             extracted_features = tf.layers.flatten(ext)
 
@@ -150,29 +151,29 @@ class SceneMemoryPolicy(RecurrentActorCriticPolicy):
             # We need to tile the observation in the (transformer's) sequence
             # dimension. We do this since we use the current observation as the
             # context when attending each memory cell in the sequence.
-            tiled_obs = tf.tile(
-                tf.reshape(extracted_features, (n_batch, 1, embedding_size)),
-                (1, memory_size, 1),
-            )
+            obs = tf.reshape(extracted_features, (n_batch, 1, embedding_size))
 
             # Create the transformer.
             # Note that here the batch and seq has been turned into a single
             # dimension. This is due to that fact that we use sequence dimension
             # in the transformer to represent the memory dimension.
             trans_out = create_transformer(
-                observation=tiled_obs,
+                observation=obs,
                 memory=memory,
                 dim_model=embedding_size,
                 dim_ff=transformer_ff_dim,
                 nbr_heads=transformer_nbr_heads,
                 nbr_encoders=transformer_nbr_encoders,
                 nbr_decoders=transformer_nbr_decoders,
-                input_mask=tiled_mask,
+                input_mask=None,
                 target_mask=None,
             )
             flat_out = tf.layers.flatten(trans_out)
+
             if post_processor is not None:
-                flat_out = post_processor(flat_out, **kwargs)
+                with tf.variable_scope("post_processor"):
+                    flat_out = post_processor(flat_out, **kwargs)
+
             value_fn = linear(flat_out, "vf", 1)
 
             self._proba_distribution, self._policy, self.q_value = self.pdtype.proba_distribution_from_latent(

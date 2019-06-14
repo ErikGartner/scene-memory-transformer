@@ -27,6 +27,12 @@ def post_processor(inp, **kwargs):
     return out
 
 
+def extractor(inp, **kwargs):
+    """Layers applied after the SMT, but before the softmax"""
+    out = tf.nn.tanh(linear(inp, "pre", 2, init_scale=np.sqrt(2)))
+    return out
+
+
 class CustomSceneMemoryPolicyCartPole(SceneMemoryPolicy):
     def __init__(
         self,
@@ -36,7 +42,7 @@ class CustomSceneMemoryPolicyCartPole(SceneMemoryPolicy):
         n_env,
         n_steps,
         n_batch,
-        memory_size=128,
+        memory_size=1,
         embedding_size=2,
         transformer_ff_dim=32,
         transformer_nbr_heads=1,
@@ -60,6 +66,7 @@ class CustomSceneMemoryPolicyCartPole(SceneMemoryPolicy):
             transformer_nbr_decoders=transformer_nbr_encoders,
             reuse=reuse,
             post_processor=post_processor,
+            extractor=extractor,
             **_kwargs
         )
 
@@ -113,10 +120,11 @@ def test_smt_train_cartpole():
         gamma=0.99,
         noptepochs=10,
         ent_coef=0.0,
-        learning_rate=3e-4,
+        learning_rate=1e-4,
         cliprange=0.2,
         verbose=1,
         tensorboard_log="./logs/",
+        full_tensorboard_log=True,
     )
 
     eprewmeans = []
@@ -171,6 +179,7 @@ def test_lstm_train_cartpole():
         cliprange=0.2,
         verbose=1,
         tensorboard_log="./logs/",
+        full_tensorboard_log=True,
     )
 
     eprewmeans = []

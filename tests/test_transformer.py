@@ -19,15 +19,12 @@ def test_intitialize_transformer():
             dtype=tf.float32,
         )
         current_obs = tf.constant(
-            np.random.rand(batch_size, memory_size, embed_size),
-            dtype=tf.float32,
+            np.random.rand(batch_size, 1, embed_size), dtype=tf.float32
         )
         input_mask = tf.constant(
             np.ones((batch_size, memory_size, memory_size)), dtype=tf.float32
         )
-        target_mask = tf.constant(
-            np.ones((batch_size, memory_size, memory_size)), dtype=tf.float32
-        )
+        target_mask = tf.constant(np.ones((batch_size, 1, 1)), dtype=tf.float32)
 
         print(f"Embeddings (scene memory output): {observations.shape}")
         print(f"Current observations (state): {current_obs.shape}")
